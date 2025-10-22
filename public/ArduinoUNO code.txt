@@ -1,0 +1,168 @@
+#include <Wire.h>
+#include <TinyMPU6050.h>
+#include <SoftwareSerial.h>
+
+// ===== Pins =====
+#define TOUCH_PIN 7
+#define RX_PIN 10   // RX from ESP32 (TX1)
+#define TX_PIN 11   // TX to ESP32 (not used)
+
+// Motor pins
+#define L_RPWM 3
+#define L_LPWM 9
+#define R_RPWM 5
+#define R_LPWM 6
+
+// ===== MPU6050 =====
+MPU6050 mpu(Wire);
+
+// ===== UART to ESP32 =====
+SoftwareSerial espSerial(RX_PIN, TX_PIN);
+
+int motorSpeed = 100; // 0 = stop, 255 = full speed
+
+// Movement tracking
+bool isTouchActive = false;
+bool lastTouchState = false;
+bool isMoving = false;
+String currentDirection = "STOPPED";
+unsigned long lastStatusSend = 0;
+unsigned long statusSendInterval = 100; // Send status every 100ms
+
+// ===== Motor functions =====
+void moveForward() {
+  analogWrite(L_RPWM, motorSpeed);
+  analogWrite(L_LPWM, 0);
+  analogWrite(R_RPWM, motorSpeed);
+  analogWrite(R_LPWM, 0);
+  isMoving = true;
+  currentDirection = "FORWARD";
+}
+
+void moveBackward() {
+  analogWrite(L_RPWM, 0);
+  analogWrite(L_LPWM, motorSpeed);
+  analogWrite(R_RPWM, 0);
+  analogWrite(R_LPWM, motorSpeed);
+  isMoving = true;
+  currentDirection = "BACKWARD";
+}
+
+void stopMotors() {
+  analogWrite(L_RPWM, 0);
+  analogWrite(L_LPWM, 0);
+  analogWrite(R_RPWM, 0);
+  analogWrite(R_LPWM, 0);
+  isMoving = false;
+  currentDirection = "STOPPED";
+}
+
+void rotateLeft30() {
+  analogWrite(L_RPWM, 0);
+  analogWrite(L_LPWM, motorSpeed);
+  analogWrite(R_RPWM, motorSpeed);
+  analogWrite(R_LPWM, 0);
+  isMoving = true;
+  currentDirection = "LEFT";
+  delay(500); // adjust for ~30 degrees rotation
+  stopMotors();
+}
+
+void rotateRight30() {
+  analogWrite(L_RPWM, motorSpeed);
+  analogWrite(L_LPWM, 0);
+  analogWrite(R_RPWM, 0);
+  analogWrite(R_LPWM, motorSpeed);
+  isMoving = true;
+  currentDirection = "RIGHT";
+  delay(500); // adjust for ~30 degrees rotation
+  stopMotors();
+}
+
+void sendStatusToESP32() {
+  // Send data format: TOUCH:1,DIR:FORWARD,MOVING:1,TILT:0
+  espSerial.print("TOUCH:");
+  espSerial.print(isTouchActive ? "1" : "0");
+  espSerial.print(",DIR:");
+  espSerial.print(currentDirection);
+  espSerial.print(",MOVING:");
+  espSerial.print(isMoving ? "1" : "0");
+  espSerial.print(",TILT:");
+  espSerial.println(isTouchActive ? "0" : "1"); // Tilt mode when touch inactive
+}
+
+void setup() {
+  Serial.begin(115200);
+  espSerial.begin(9600);
+
+  pinMode(TOUCH_PIN, INPUT);
+  pinMode(L_RPWM, OUTPUT);
+  pinMode(L_LPWM, OUTPUT);
+  pinMode(R_RPWM, OUTPUT);
+  pinMode(R_LPWM, OUTPUT);
+
+  Wire.begin();
+
+  Serial.println("Initializing MPU6050...");
+  mpu.Initialize();       // Required for TinyMPU6050
+  Serial.println("Calibrating MPU6050...");
+  mpu.Calibrate();        // Optional but recommended
+  Serial.println("✅ MPU6050 ready!");
+
+
+    sendStatusToESP32();
+}
+
+void loop() {
+  // Check touch sensor
+  lastTouchState = isTouchActive;
+  isTouchActive = digitalRead(TOUCH_PIN) == HIGH;
+  
+  // Touch state changed - send update immediately
+  if (isTouchActive != lastTouchState) {
+    sendStatusToESP32();
+  }
+
+  if (!isTouchActive) {
+    // Tilt control mode
+    mpu.Execute();
+    float angleX = mpu.GetAngX(); // forward/back tilt
+
+    if (angleX > 15) {
+      moveForward();
+    } else if (angleX < -15) {
+      moveBackward();
+    } else {
+      stopMotors();
+    }
+
+  } else {
+    // Gesture mode: pause tilt, accept commands from ESP32
+    stopMotors();
+
+    while (espSerial.available()) {
+      int gesture = espSerial.parseInt(); // read integer sent from ESP32
+
+      switch (gesture) {
+        case 2:  rotateLeft30();    break; // DIR_LEFT
+        case 1:  rotateRight30();   break; // DIR_RIGHT
+        default: stopMotors();      break; // ignore other gestures
+      }
+
+      // Clear remaining characters in buffer until newline
+      while (espSerial.available() && espSerial.read() != '\n');
+    }
+  }
+
+  // Send periodic status updates to ESP32
+  unsigned long currentTime = millis();
+  if (currentTime - lastStatusSend >= statusSendInterval) {
+    lastStatusSend = currentTime;
+    sendStatusToESP32();
+  }
+
+  delay(50);
+}
+
+
+

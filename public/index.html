@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wheelchair-X Real-Time Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      padding: 25px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      color: #667eea;
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 8px 20px;
+      border-radius: 25px;
+      font-weight: bold;
+      font-size: 0.9em;
+      margin: 5px;
+    }
+
+    .status-online {
+      background: #10b981;
+      color: white;
+    }
+
+    .status-offline {
+      background: #ef4444;
+      color: white;
+    }
+
+    .status-touch-active {
+      background: #3b82f6;
+      color: white;
+      animation: pulse 1.5s infinite;
+    }
+
+    .status-touch-inactive {
+      background: #6b7280;
+      color: white;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 25px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: white;
+      padding: 25px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      transition: transform 0.3s;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+    }
+
+    .card h2 {
+      color: #667eea;
+      margin-bottom: 15px;
+      font-size: 1.5em;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+    }
+
+    .direction-display {
+      font-size: 4em;
+      text-align: center;
+      padding: 40px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 15px;
+      margin: 15px 0;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+      transition: all 0.3s ease;
+    }
+
+    .direction-stopped {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    }
+
+    .direction-forward {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+
+    .direction-backward {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+
+    .direction-left {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+
+    .direction-right {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 15px;
+      margin: 10px 0;
+      background: #f3f4f6;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+      align-items: center;
+    }
+
+    .stat-label {
+      font-weight: 600;
+      color: #4b5563;
+      font-size: 1.1em;
+    }
+
+    .stat-value {
+      font-weight: bold;
+      color: #667eea;
+      font-size: 1.5em;
+    }
+
+    .big-stat {
+      text-align: center;
+      padding: 30px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 15px;
+      margin: 15px 0;
+    }
+
+    .big-stat-value {
+      font-size: 3.5em;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+
+    .big-stat-label {
+      font-size: 1.2em;
+      opacity: 0.9;
+    }
+
+    .touch-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      border-radius: 10px;
+      font-size: 1.5em;
+      font-weight: bold;
+      margin: 15px 0;
+      transition: all 0.3s;
+    }
+
+    .touch-active {
+      background: #3b82f6;
+      color: white;
+      animation: pulse 1.5s infinite;
+    }
+
+    .touch-inactive {
+      background: #e5e7eb;
+      color: #6b7280;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+      }
+    }
+
+    .live-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      background: #10b981;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: blink 2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .chart-container {
+      grid-column: 1 / -1;
+      background: white;
+      padding: 25px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    canvas {
+      max-height: 300px;
+    }
+
+    .realtime-badge {
+      display: inline-block;
+      background: #ef4444;
+      color: white;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 0.8em;
+      font-weight: bold;
+      margin-left: 10px;
+      animation: blink 1s infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>♿ Wheelchair-X Dashboard <span class="realtime-badge">● LIVE</span></h1>
+      <div>
+        <div class="status-badge" id="connectionStatus">
+          <span class="live-indicator"></span>Connecting...
+        </div>
+        <div class="status-badge" id="touchStatus">Touch: Unknown</div>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <!-- Current Direction -->
+      <div class="card" style="grid-column: span 2;">
+        <h2>🧭 Current Direction (Touch Active Only)</h2>
+        <div class="touch-indicator" id="touchIndicator">
+          <span id="touchIcon">👆</span>
+          <span id="touchText" style="margin-left: 10px;">Waiting for touch...</span>
+        </div>
+        <div class="direction-display" id="currentDirection">STOPPED</div>
+        <div class="stat-item">
+          <span class="stat-label">Movement Status:</span>
+          <span class="stat-value" id="movementStatus">Idle</span>
+        </div>
+      </div>
+
+      <!-- Distance Covered -->
+      <div class="card">
+        <h2>📏 Distance Covered</h2>
+        <div class="big-stat" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+          <div class="big-stat-label">Total Distance</div>
+          <div class="big-stat-value" id="totalDistance">0.00</div>
+          <div class="big-stat-label">meters</div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Kilometers:</span>
+          <span class="stat-value" id="totalKm">0.000</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Session:</span>
+          <span class="stat-value" id="sessionDistance">0.00 m</span>
+        </div>
+      </div>
+
+      <!-- Time Traveled -->
+      <div class="card">
+        <h2>⏱️ Time Traveled</h2>
+        <div class="big-stat" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+          <div class="big-stat-label">Total Time</div>
+          <div class="big-stat-value" id="totalTime">00:00:00</div>
+          <div class="big-stat-label">HH:MM:SS</div>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Hours:</span>
+          <span class="stat-value" id="timeHours">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Minutes:</span>
+          <span class="stat-value" id="timeMinutes">0</span>
+        </div>
+      </div>
+
+      <!-- Gesture Statistics -->
+      <div class="card">
+        <h2>📊 Gesture Statistics</h2>
+        <div class="stat-item">
+          <span class="stat-label">⬆️ Forward:</span>
+          <span class="stat-value" id="upCount">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">⬇️ Backward:</span>
+          <span class="stat-value" id="downCount">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">⬅️ Left Turn:</span>
+          <span class="stat-value" id="leftCount">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">➡️ Right Turn:</span>
+          <span class="stat-value" id="rightCount">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">📈 Total:</span>
+          <span class="stat-value" id="totalGestures">0</span>
+        </div>
+      </div>
+
+      <!-- System Info -->
+      <div class="card">
+        <h2>⚙️ System Info</h2>
+        <div class="stat-item">
+          <span class="stat-label">WiFi Signal:</span>
+          <span class="stat-value" id="wifiStrength">--</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Last Update:</span>
+          <span class="stat-value" id="lastUpdate">--</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Status:</span>
+          <span class="stat-value" id="systemStatus">--</span>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="chart-container">
+        <h2>📈 Direction Distribution</h2>
+        <canvas id="gestureChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    // Chart Setup (MUST BE INITIALIZED FIRST!)
+    const ctx = document.getElementById('gestureChart').getContext('2d');
+    const gestureChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Forward', 'Backward', 'Left', 'Right'],
+        datasets: [{
+          label: 'Gesture Count',
+          data: [0, 0, 0, 0],
+          backgroundColor: [
+            '#10b981',
+            '#ef4444',
+            '#f59e0b',
+            '#3b82f6'
+          ],
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            }
+          }
+        }
+      }
+    });
+
+    // Direction icons mapping
+    const directionIcons = {
+      'FORWARD': '⬆️',
+      'BACKWARD': '⬇️',
+      'LEFT': '⬅️',
+      'RIGHT': '➡️',
+      'STOPPED': '🛑'
+    };
+
+    // Fetch data from local server
+    function fetchData() {
+      // Get status
+      fetch('/api/wheelchair/status')
+        .then(response => response.json())
+        .then(data => {
+          updateStatus(data);
+          // Update connection status to online if data received
+          document.getElementById('connectionStatus').className = 'status-badge status-online';
+          document.getElementById('connectionStatus').innerHTML = '<span class="live-indicator"></span>Online';
+        })
+        .catch(error => {
+          console.error('Connection error:', error);
+          document.getElementById('connectionStatus').className = 'status-badge status-offline';
+          document.getElementById('connectionStatus').textContent = 'Offline';
+        });
+
+      // Get statistics
+      fetch('/api/wheelchair/statistics')
+        .then(response => response.json())
+        .then(data => updateStatistics(data))
+        .catch(error => console.error('Statistics error:', error));
+    }
+
+    function updateStatus(data) {
+      // Update touch status
+      const touchActive = data.touchActive;
+      const touchIndicator = document.getElementById('touchIndicator');
+      const touchStatus = document.getElementById('touchStatus');
+      const touchIcon = document.getElementById('touchIcon');
+      const touchText = document.getElementById('touchText');
+      
+      if (touchActive) {
+        touchIndicator.className = 'touch-indicator touch-active';
+        touchStatus.className = 'status-badge status-touch-active';
+        touchStatus.textContent = '👆 Touch: ACTIVE';
+        touchIcon.textContent = '✅';
+        touchText.textContent = 'Touch sensor activated - Gestures enabled';
+      } else {
+        touchIndicator.className = 'touch-indicator touch-inactive';
+        touchStatus.className = 'status-badge status-touch-inactive';
+        touchStatus.textContent = '🚫 Touch: INACTIVE';
+        touchIcon.textContent = '❌';
+        touchText.textContent = 'Touch sensor not active - Tilt mode enabled';
+      }
+
+      // Update direction with icon and color
+      const direction = data.currentDirection || 'STOPPED';
+      const directionDisplay = document.getElementById('currentDirection');
+      directionDisplay.textContent = directionIcons[direction] + ' ' + direction;
+      directionDisplay.className = 'direction-display direction-' + direction.toLowerCase();
+      
+      // Update movement
+      document.getElementById('movementStatus').textContent = data.isMoving ? '🚀 Moving' : '🛑 Stopped';
+      
+      // Update distance
+      document.getElementById('totalDistance').textContent = (data.totalDistanceMeters || 0).toFixed(2);
+      document.getElementById('totalKm').textContent = (data.totalDistanceKm || 0).toFixed(3);
+      document.getElementById('sessionDistance').textContent = (data.sessionDistanceMeters || 0).toFixed(2) + ' m';
+      
+      // Update time
+      const hours = String(data.timeHours || 0).padStart(2, '0');
+      const minutes = String(data.timeMinutes || 0).padStart(2, '0');
+      const seconds = String(data.timeSeconds || 0).padStart(2, '0');
+      document.getElementById('totalTime').textContent = `${hours}:${minutes}:${seconds}`;
+      document.getElementById('timeHours').textContent = data.timeHours || 0;
+      document.getElementById('timeMinutes').textContent = data.timeMinutes || 0;
+      
+      // Update WiFi and system info
+      document.getElementById('wifiStrength').textContent = data.wifiStrength ? `${data.wifiStrength} dBm` : '--';
+      document.getElementById('lastUpdate').textContent = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : '--';
+      document.getElementById('systemStatus').textContent = 'Online';
+    }
+
+    function updateStatistics(data) {
+      document.getElementById('upCount').textContent = data.upCount || 0;
+      document.getElementById('downCount').textContent = data.downCount || 0;
+      document.getElementById('leftCount').textContent = data.leftCount || 0;
+      document.getElementById('rightCount').textContent = data.rightCount || 0;
+      document.getElementById('totalGestures').textContent = data.totalGestures || 0;
+      
+      // Update chart
+      gestureChart.data.datasets[0].data = [
+        data.upCount || 0,
+        data.downCount || 0,
+        data.leftCount || 0,
+        data.rightCount || 0
+      ];
+      gestureChart.update();
+    }
+
+    // Update every 1 second
+    setInterval(fetchData, 1000);
+    fetchData();  // Initial fetch
+
+    console.log('🚀 Wheelchair-X Local Dashboard Initialized!');
+  </script>
+</body>
+</html>
